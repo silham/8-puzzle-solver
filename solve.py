@@ -90,8 +90,7 @@ def misplaced_items(current, goal):
 
 def solve(current, goal, size):
     global depth
-    current_state = current["state"]
-    if manhattan_distance(current_state, goal, size) == 0:
+    if manhattan_distance(current["state"], goal, size) == 0:
         sys.exit("Solved")
     elif depth > 100:
         sys.exit("too many steps")
