@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 
-steps = 0
+depth = 0
 
 
 def main():
@@ -39,8 +39,9 @@ def main():
 
     initial = np.array(intLst).reshape(s, s)
     goal = goal_state(s)
+    print(manhattan_distance(initial, goal, s))
     if solvability(intLst, s):
-        solve({"state": initial, "prev_move": None}, goal, s)
+        solve({"state": initial, "move": None}, goal, s)
     else:
         sys.exit("This puzzle is not solvable")
 
@@ -88,21 +89,27 @@ def misplaced_items(current, goal):
 
 
 def solve(current, goal, size):
-    steps += 1
-    directions = find_directions(current["state"], current["prev_move"])
-    print(directions)
-    distances = []
-    possible_moves = make_moves(directions, current["state"])
-    for move in possible_moves:
-        distance = manhattan_distance(move["state"], goal, size)
-        distances.append(distance)
-    min_distance = min(distances)
-    min_distances = [i for i in distances if i == min_distance]
-    min_distance_states = []
-    for distance in min_distances:
-        state = possible_moves[min_distances.index(distance)]
-        min_distance_states.append(state)
-    print(min_distance_states)
+    global depth
+    current_state = current["state"]
+    if manhattan_distance(current_state, goal, size) == 0:
+        sys.exit("Solved")
+    elif depth > 100:
+        sys.exit("too many steps")
+    else:
+        depth += 1
+        directions = find_directions(current["state"], current["move"])
+        possible_moves = make_moves(directions, current["state"])
+        for move in possible_moves:
+            distance = manhattan_distance(move["state"], goal, size)
+            move["distance"] = distance
+        min_distance = min(move["distance"] for move in possible_moves)
+        min_distance_states = [
+            move for move in possible_moves if move["distance"] == min_distance
+        ]
+        print(depth)
+        for state in min_distance_states:
+            print(state["state"])
+            solve(state, goal, size)
 
 
 def find_directions(arr, prev):
@@ -132,28 +139,28 @@ def make_moves(directions, state):
                 current[zero_pos[0] - 1, zero_pos[1]],
                 current[zero_pos[0], zero_pos[1]],
             )
-            moved_states.append({"state": current, "prev_move": "up"})
+            moved_states.append({"state": current, "move": "up"})
 
         if direction == "left":
             current[zero_pos[0], zero_pos[1]], current[zero_pos[0], zero_pos[1] - 1] = (
                 current[zero_pos[0], zero_pos[1] - 1],
                 current[zero_pos[0], zero_pos[1]],
             )
-            moved_states.append({"state": current, "prev_move": "left"})
+            moved_states.append({"state": current, "move": "left"})
 
         if direction == "right":
             current[zero_pos[0], zero_pos[1]], current[zero_pos[0], zero_pos[1] + 1] = (
                 current[zero_pos[0], zero_pos[1] + 1],
                 current[zero_pos[0], zero_pos[1]],
             )
-            moved_states.append({"state": current, "prev_move": "right"})
+            moved_states.append({"state": current, "move": "right"})
 
         if direction == "down":
             current[zero_pos[0], zero_pos[1]], current[zero_pos[0] + 1, zero_pos[1]] = (
                 current[zero_pos[0] + 1, zero_pos[1]],
                 current[zero_pos[0], zero_pos[1]],
             )
-            moved_states.append({"state": current, "prev_move": "down"})
+            moved_states.append({"state": current, "move": "down"})
     return moved_states
 
 
