@@ -2,6 +2,8 @@ import numpy as np
 import sys
 
 depth = 0
+moves = []
+visited_states = []
 
 
 def main():
@@ -89,12 +91,18 @@ def misplaced_items(current, goal):
 
 
 def solve(current, goal, size):
-    global depth
+    global moves, visited_states, depth
+    if current["move"] != None:
+        moves.append(current["move"])
     if manhattan_distance(current["state"], goal, size) == 0:
+        print(moves)
         sys.exit("Solved")
     elif depth > 100:
         sys.exit("too many steps")
+    elif any(visited_states == current["state"]):
+        pass
     else:
+        visited_states.append(current["state"])
         depth += 1
         directions = find_directions(current["state"], current["move"])
         possible_moves = make_moves(directions, current["state"])
@@ -106,9 +114,11 @@ def solve(current, goal, size):
             move for move in possible_moves if move["distance"] == min_distance
         ]
         print(depth)
-        for state in min_distance_states:
-            print(state["state"])
-            solve(state, goal, size)
+        if len(min_distance_states) > 1:
+            for state in min_distance_states:
+                solve(state, goal, size)
+        else:
+            solve(min_distance_states[0], goal, size)
 
 
 def find_directions(arr, prev):
