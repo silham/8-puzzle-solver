@@ -1,7 +1,8 @@
 import numpy as np
 import argparse
 import sys
-from utils import Node, QueueFrontier, StackFrontier
+from utils import Node
+from queue import PriorityQueue
 
 def main():
     ap = argparse.ArgumentParser(description="Solve n x n slide puzzles")
@@ -25,7 +26,10 @@ def main():
     except:
         sys.exit("Something went wrong with arguments")
     if solvability(initial, size):
-        print(solve(initial, goal, size))
+        solution = solve(initial, goal, size)
+        print(solution[0])
+        print(len(solution[0]))
+        print(solution[1])
     else:
         sys.exit("Initial state is not solvable")
 
@@ -128,30 +132,29 @@ def result(direction, state, size):
 
 
 def solve(state, goal, size):
-    start = Node(state, None, None, 0)
-    frontier = StackFrontier()
-    frontier.add(start)
-    explored = []
+    start = Node(state, None, None, 0, manhattan_distance(state, goal, size))
+    frontier = PriorityQueue()
+    frontier.put(start)
+    explored = set()
     while True:
         if frontier.empty():
             return None
-        node = frontier.remove()
-        print(node.depth)
-        print(np.array(node.state).reshape(size, size))
-        explored.append(node.state) 
+        node = frontier.get()
+        explored.add(tuple(node.state)) 
         if node.state == goal:
             moves = []
             while node.parent is not None:
                 moves.append(node.action)
                 node = node.parent
             moves.reverse()
-            return moves
+            return (moves, len(explored))
         for action in actions(node.state, goal, size):
             if node.depth >= 50:
                 pass
-            child = Node(result(action, node.state, size), node, action, depth = node.depth + 1)
-            if not frontier.contains_state(child.state) and child.state not in explored:
-                frontier.add(child)
+            result_state = result(action, node.state, size)
+            child = Node(result_state, node, action, depth = node.depth + 1, manhattan=manhattan_distance(result_state, goal, size))
+            if tuple(child.state) not in explored and solvability(child.state, size):
+                frontier.put(child)
         
 
 def manhattan_distance(current, goal, size):
