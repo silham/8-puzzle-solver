@@ -3,6 +3,11 @@ import argparse
 import sys
 from utils import Node
 from queue import PriorityQueue
+import time
+import sqlite3
+
+con = sqlite3.connect("states.db")
+cur = con.cursor()
 
 def main():
     ap = argparse.ArgumentParser(description="Solve n x n slide puzzles")
@@ -11,27 +16,71 @@ def main():
     ap.add_argument("-g", "--goal", nargs='+', type=int, default=None, help="Goal state of the puzzle")
     args = ap.parse_args()
 
-    try:
-        if not 3 <= args.size <= 10:
-            sys.exit("Size of the puzzle must be between 3 and 10")
-        if not validate_input(args.initial, args.size):
-            sys.exit("Initial state is not valid")
-        if args.goal:
-            if not validate_input(args.goal, args.size):
-                sys.exit("Goal state is not valid")
 
-        size = args.size
-        initial = args.initial
-        goal = args.goal if args.goal else goal_state(size)
-    except:
-        sys.exit("Something went wrong with arguments")
+    if not 3 <= args.size <= 5:
+        sys.exit("Size of the puzzle must be between 3 and 5")
+    if not validate_input(args.initial, args.size):
+        sys.exit("Initial state is not valid")
+    if args.goal:
+        if not validate_input(args.goal, args.size):
+            sys.exit("Goal state is not valid")
+
+    size = args.size
+    initial = args.initial
+    goal = args.goal if args.goal else goal_state(size)
+    cur.execute(f"CREATE TABLE IF NOT EXISTS x{size} (state VARCHAR(50) UNIQUE, solution VARCHAR(1000))")
+
+    start_time = time.process_time()
     if solvability(initial, size):
-        solution = solve(initial, goal, size)
-        print(solution[0])
-        print(len(solution[0]))
-        print(solution[1])
+        str_state = state_to_str(initial)
+        if size == 3:
+            cur.execute("SELECT solution FROM x3 WHERE state = ?", (str_state,))
+        elif size == 4:
+            cur.execute("SELECT solution FROM x4 WHERE state = ?", (str_state,))
+        elif size == 5:
+            cur.execute("SELECT solution FROM x5 WHERE state = ?", (str_state,))
+        res = cur.fetchall()
+        if len(res) == 0:
+            solution = solve(initial, goal, size)
+            path = solution[0]
+            if solution[0] is not None:
+                add_to_db(initial, path, size)
+            total_duration = np.round(time.process_time() - start_time, 4)
+            print_result(initial, path, size, total_duration)
+        elif len(res) == 1:
+            path = res[0][0].split("-")
+            print_result(initial, path, size, None)
+        else:
+            sys.exit("Database is corrupted")
     else:
         sys.exit("Initial state is not solvable")
+
+
+
+def solve(state, goal, size):
+    start = Node(state, None, None, 0, manhattan_distance(state, goal, size))
+    frontier = PriorityQueue()
+    frontier.put(start)
+    explored = set()
+    while True:
+        if frontier.empty():
+            return None
+        node = frontier.get()
+        explored.add(tuple(node.state)) 
+        if node.state == goal:
+            moves = []
+            while node.parent is not None:
+                moves.append(node.action)
+                node = node.parent
+            moves.reverse()
+            return (moves, len(explored))
+        for action in actions(node.state, goal, size):
+            if node.depth >= 150:
+                pass
+            result_state = result(action, node.state, size)
+            child = Node(result_state, node, action, depth = node.depth + 1, manhattan=manhattan_distance(result_state, goal, size))
+            if tuple(child.state) not in explored and solvability(child.state, size):
+                frontier.put(child)
 
 
 
@@ -59,7 +108,7 @@ def solvability(lst, size):
         for j in lst[x:]:
             if i > j and j != 0:
                 inversions += 1
-    lineFromB = (pow(size, 2) - (lst.index(0) + 1)) // size
+    lineFromB = ( ( pow(size, 2) - (lst.index(0) + 1) ) // size ) + 1
     if size % 2 == 1:
         if inversions % 2 == 0:
             return True
@@ -92,8 +141,6 @@ def actions(state, goal, size):
 
     for direction in directions:
         manhattan_distances.append({"direction":direction, "distance":manhattan_distance(result(direction, state, size), goal, size)})
-    
-    lowest_age = min(item["distance"] for item in manhattan_distances)
     return [item["direction"] for item in sorted(manhattan_distances, key=lambda x: x['distance'], reverse=True)]
 
 
@@ -129,32 +176,6 @@ def result(direction, state, size):
         )
         return state.flatten().tolist()
 
-
-
-def solve(state, goal, size):
-    start = Node(state, None, None, 0, manhattan_distance(state, goal, size))
-    frontier = PriorityQueue()
-    frontier.put(start)
-    explored = set()
-    while True:
-        if frontier.empty():
-            return None
-        node = frontier.get()
-        explored.add(tuple(node.state)) 
-        if node.state == goal:
-            moves = []
-            while node.parent is not None:
-                moves.append(node.action)
-                node = node.parent
-            moves.reverse()
-            return (moves, len(explored))
-        for action in actions(node.state, goal, size):
-            if node.depth >= 50:
-                pass
-            result_state = result(action, node.state, size)
-            child = Node(result_state, node, action, depth = node.depth + 1, manhattan=manhattan_distance(result_state, goal, size))
-            if tuple(child.state) not in explored and solvability(child.state, size):
-                frontier.put(child)
         
 
 def manhattan_distance(current, goal, size):
@@ -166,6 +187,58 @@ def manhattan_distance(current, goal, size):
         pos_final = np.array(np.where(goal == num)).flatten()
         manhattan_distance += np.sum(np.abs(pos_final - pos_current))
     return manhattan_distance
+
+
+
+def print_puzzle_state(state, size):
+    for row in range(size):
+        for col in range(size):
+            value = state[row * size + col]
+            if value == 0:
+                print(" ", end=" " if size == 3 else "  ")
+            else:
+                if size == 3:
+                    print(value, end=" ")
+                else:
+                    print(value if value > 9 else f" {value}", end="  ")
+        print()
+    print()
+
+
+
+def print_result(initial, path, size, time):
+    print("Initial state:")
+    print_puzzle_state(initial, size)
+    prev_state = initial
+    for action in path:
+        print(f"Move empty slot {action.upper()}")
+        current_state = result(action, prev_state, size)
+        print_puzzle_state(current_state, size)
+        prev_state = current_state
+    print(f"Reached to goal state in {len(path)} moves,", f"took {time} seconds to solve" if time is not None else "solution found in database", end="\n\n")
+
+
+
+def add_to_db(initial, path, size):
+    str_state = state_to_str(initial)
+    str_solution = "-".join(path)
+    cur.execute(f"INSERT INTO x{size} (state, solution) VALUES (?, ?)", (str_state, str_solution))
+    con.commit()
+    prev_state = initial
+    for i in range(len(path) - 1):
+        state = result(path[i], prev_state, size)
+        str_state = state_to_str(state)
+        str_solution = "-".join(path[:i+1])
+        cur.execute(f"INSERT OR IGNORE INTO x{size} (state, solution) VALUES (?, ?)", (str_state, str_solution))
+        con.commit()
+        prev_state = state
+
+def state_to_str(initial):
+    str_state = ""
+    for i in initial:
+        str_state += str(i) + "-"
+    str_state = str_state[:-1]
+    return str_state
 
 
 if __name__ == "__main__":
