@@ -17,8 +17,8 @@ def main():
     args = ap.parse_args()
 
 
-    if not 3 <= args.size <= 5:
-        sys.exit("Size of the puzzle must be between 3 and 5")
+    if not 3 <= args.size <= 4:
+        sys.exit("Size of the puzzle must be 3 or 4")
     if not validate_input(args.initial, args.size):
         sys.exit("Initial state is not valid")
     if args.goal:
@@ -31,14 +31,12 @@ def main():
     cur.execute(f"CREATE TABLE IF NOT EXISTS x{size} (state VARCHAR(50) UNIQUE, solution VARCHAR(1000))")
 
     start_time = time.process_time()
-    if solvability(initial, size):
+    if solvability(initial, size) and not args.goal:
         str_state = state_to_str(initial)
         if size == 3:
             cur.execute("SELECT solution FROM x3 WHERE state = ?", (str_state,))
         elif size == 4:
             cur.execute("SELECT solution FROM x4 WHERE state = ?", (str_state,))
-        elif size == 5:
-            cur.execute("SELECT solution FROM x5 WHERE state = ?", (str_state,))
         res = cur.fetchall()
         if len(res) == 0:
             solution = solve(initial, goal, size)
@@ -52,6 +50,12 @@ def main():
             print_result(initial, path, size, None)
         else:
             sys.exit("Database is corrupted")
+    elif args.goal:
+        str_state = state_to_str(initial)
+        solution = solve(initial, goal, size)
+        total_duration = np.round(time.process_time() - start_time, 4)
+        path = solution[0]
+        print_result(initial, path, size, total_duration)
     else:
         sys.exit("Initial state is not solvable")
 
@@ -75,7 +79,7 @@ def solve(state, goal, size):
             moves.reverse()
             return (moves, len(explored))
         for action in actions(node.state, goal, size):
-            if node.depth >= 150:
+            if node.depth >= 85:
                 pass
             result_state = result(action, node.state, size)
             child = Node(result_state, node, action, depth = node.depth + 1, manhattan=manhattan_distance(result_state, goal, size))
@@ -207,15 +211,18 @@ def print_puzzle_state(state, size):
 
 
 def print_result(initial, path, size, time):
-    print("Initial state:")
-    print_puzzle_state(initial, size)
-    prev_state = initial
-    for action in path:
-        print(f"Move empty slot {action.upper()}")
-        current_state = result(action, prev_state, size)
-        print_puzzle_state(current_state, size)
-        prev_state = current_state
-    print(f"Reached to goal state in {len(path)} moves,", f"took {time} seconds to solve" if time is not None else "solution found in database", end="\n\n")
+    if not path:
+        sys.exit("No solutions found for this initial state")
+    else:
+        print("Initial state:")
+        print_puzzle_state(initial, size)
+        prev_state = initial
+        for action in path:
+            print(f"Move empty slot {action.upper()}")
+            current_state = result(action, prev_state, size)
+            print_puzzle_state(current_state, size)
+            prev_state = current_state
+        print(f"Reached to goal state in {len(path)} moves,", f"took {time} seconds to solve" if time is not None else "solution found in database", end="\n\n")
 
 
 
